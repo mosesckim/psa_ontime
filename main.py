@@ -13,6 +13,12 @@ from utils import split_data, process_schedule_data, restrict_by_coverage, get_c
 from baseline import BaselineModel
 
 
+st.set_page_config(
+    page_title="PSA-ONTIME: Schedule",
+    page_icon="📅",
+)
+
+
 # TITLE
 # TODO: alternative?
 st.title("PSA-ONTIME")
