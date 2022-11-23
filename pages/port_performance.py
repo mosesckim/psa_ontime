@@ -15,7 +15,7 @@ st.markdown("# Port Dwell")
 st.sidebar.header("Port Performance")
 st.write(
     """We visualize the relationship between average wait time (schedule data)
-    and port dwell time (port performance data), computing an F-statistic p-value
+    and port dwell time (port performance data) and compute an F-statistic p-value
     as a preliminary check for linear regression on wait time."""
 )
 
@@ -65,6 +65,10 @@ port_data = read_file(bucket_name, file_path, is_csv=False)
 
 port_call_df = port_data
 
+show_port_call = st.checkbox("Show port call data")
+if show_port_call:
+    st.write(port_call_df)
+
 # ALIGN PORT DATA WITH SCHEDULE
 # create new column seaport_code
 # for port_call_df and rel_df
@@ -83,8 +87,6 @@ rel_df_no_orf.loc[:, "seaport_code"] = rel_df_no_orf["POD"]
 agg_cols = ["seaport_code", "Month", "Year"]
 target_cols = ["Port_Hours", "Anchorage_Hours"]
 
-
-port_call_df[target_cols + agg_cols].groupby(agg_cols).mean().reset_index()
 
 port_hours_avg = port_call_df[target_cols + agg_cols].groupby(
     agg_cols

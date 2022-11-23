@@ -15,7 +15,7 @@ st.markdown("# Carrier Rate")
 st.sidebar.header("Freight")
 st.write(
     """Similar to port performance, we visualize the relationship between average transit time
-    and carrier rate for a given carrier and port of destination, computing an F-statistic p-value
+    and carrier rate for a given carrier and port of destination and compute an F-statistic p-value
     as a preliminary check for linear regression on average transit time."""
 )
 
@@ -68,6 +68,11 @@ carrier_data = read_file(
     is_csv=False,
     sheet=sheet_name
 )
+
+show_freight_data = st.checkbox("Show freight data")
+if show_freight_data:
+    st.write(carrier_data)
+
 
 freight_df = carrier_data
 
