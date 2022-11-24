@@ -117,12 +117,38 @@ def split_data(rel_df_nona, datetime_split, label="Avg_TTDays"):
     val_res = val.loc[indices_inter, :]
 
     # group by unique tuples for train data (baseline model)
+    # train_on_time_rel_by_carr_ser = train[[
+    #     "Carrier", "Service", "POD", "POL", label
+    # ]].groupby(["Carrier", "Service", "POD", "POL"]).median().reset_index()
+    #
+    # train_on_time_rel_by_carr_ser.columns = [
+    #     "Carrier", "Service", "POD", "POL", label
+    # ]
+
+    # use weighted average
     train_on_time_rel_by_carr_ser = train[[
         "Carrier", "Service", "POD", "POL", label
-    ]].groupby(["Carrier", "Service", "POD", "POL"]).mean().reset_index()
+    ]].groupby(["Carrier", "Service", "POD", "POL"]).apply(
+        lambda x: (weighted_average_ser(x[label].values), x[label].values.std())
+    ).reset_index()
+
+    train_on_time_rel_by_carr_ser.loc[:, f"{label}"] = train_on_time_rel_by_carr_ser[0].apply(lambda x: x[0])
+    train_on_time_rel_by_carr_ser.loc[:, f"{label}(std)"] = train_on_time_rel_by_carr_ser[0].apply(lambda x: x[1])
+
+    train_on_time_rel_by_carr_ser.drop(0, axis=1, inplace=True)
+
     train_df = train_on_time_rel_by_carr_ser.copy()
 
     return train_df, val_res
+
+
+def weighted_average_ser(ser):
+
+    wts = pd.Series([1 / val if val != 0 else 0 for val in ser])
+
+    if wts.sum() == 0: return 0
+
+    return (ser * wts).sum() / wts.sum()
 
 
 # process data
