@@ -9,7 +9,13 @@ class BaselineModel:
         pred = self.train_df[
             (self.train_df["Carrier"]==carrier) & (self.train_df["Service"]==service) & \
             (self.train_df["POD"]==pod) & (self.train_df["POL"]==pol)
-        ][self.label]
+        ]
+
+        # predict label
+        label_pred = pred[self.label]
+
+        # predict interval
+        label_pred_std = pred[f"{self.label}(std)"]
 
 
-        return pred.iloc[0]
+        return label_pred.iloc[0], label_pred_std.iloc[0]
