@@ -139,24 +139,35 @@ if plot:
         carrier_mask
     ]
 
+    # TODO: implement drop down menu for target labels
     # compute p-value
-    target = source["Avg_WaitTime_POD_Days"]
-    predictors = source[["Avg_Anchorage_Hours"]]
+    label = "Avg_WaitTime_POD_Days"
+    predictor_label = "Avg_Port_Hours"  #"Avg_Anchorage_Hours"
+    target = source[label]
+
+    predictor_format_label = ""
+
+    if label == "Avg_Anchorage_Hours":
+        predictor_format_label = "Anchorage"
+    else:
+        predictor_format_label = "Service"  # Dhaval and Jiahao found service hours include anchorage time
+
+    predictors = source[[predictor_label]]
 
     p_value = round(f_regression(predictors, target)[1][0], 2)
 
-    base = alt.Chart(source, title=f"Wait/Anchorage Time at port {POD_option} for carrier {carrier_option}\n(p-value={p_value})").encode(
+    base = alt.Chart(source, title=f"Wait/{predictor_format_label} Time at port {POD_option} for carrier {carrier_option}\n(p-value={p_value})").encode(
         alt.X('month(Date):T', axis=alt.Axis(title=None))
     )
 
     transittime = base.mark_line(stroke='#5276A7', interpolate='monotone').encode(
-        alt.Y('average(Avg_WaitTime_POD_Days)',
+        alt.Y(f'average({label})',
             axis=alt.Axis(title='Avg. Wait Time (days)', titleColor='#5276A7'))
     )
 
     anchoragetime = base.mark_line(stroke='green', interpolate='monotone').encode(
-        alt.Y('average(Avg_Anchorage_Hours)',
-            axis=alt.Axis(title='Avg. Anchorage Time (hours)', titleColor='green'))
+        alt.Y(f'average({predictor_label})',
+            axis=alt.Axis(title=f'Avg. {predictor_format_label} Time (hours)', titleColor='green'))
     )
 
     c = alt.layer(transittime, anchoragetime).resolve_scale(
