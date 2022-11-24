@@ -3,6 +3,7 @@ import datetime
 import streamlit as st
 import pandas as pd
 import numpy as np
+import altair as alt
 
 from google.oauth2 import service_account
 from google.cloud import storage
@@ -74,7 +75,7 @@ rel_df_nona = restrict_by_coverage(rel_df_nona)
 with st.sidebar:
     label = st.selectbox(
             'Label: ',
-            ("Avg_TTDays", "OnTime_Reliability"))
+            ("Avg_TTDays", "Avg_WaitTime_POD_Days")) #"OnTime_Reliability"))
 
     # time horizon for train split
     split_month = st.slider('Time Horizon (month)', 3, 6, 6)
@@ -134,10 +135,17 @@ if partial_pred or overall_pred:
     # instantiate baseline model
     base_model = BaselineModel(train_df_filtered, label=label)
     preds = []
+    preds_std = []
     with st.spinner("Computing predictions..."):
         for ind, row in val_X_filtered.iterrows():
-            pred = base_model.predict(*row)
+            pred, pred_std = base_model.predict(*row)
+
             preds.append(pred)
+            preds_std.append(pred_std)
+
+
+    preds_array = np.array(preds)
+    preds_std_array = np.array(preds_std)
 
     nonzero_mask = val_y_filtered != 0
     nonzero_mask = nonzero_mask.reset_index()[label]
@@ -146,6 +154,8 @@ if partial_pred or overall_pred:
     if sum(nonzero_mask) != 0:
 
         preds = pd.Series(preds)[nonzero_mask]
+        preds_std = pd.Series(preds_std)[nonzero_mask]
+
         val_y_filtered = val_y_filtered.reset_index()[label]
         val_y_filtered = val_y_filtered[nonzero_mask]
 
@@ -153,6 +163,8 @@ if partial_pred or overall_pred:
         val_X_filtered = val_X_filtered[nonzero_mask]
 
         preds_array = np.array(preds)
+        preds_std_array = np.array(preds_std)
+
         val_gt = val_y_filtered.values
 
         baseline_mae = mean_absolute_error(val_gt, preds_array)
@@ -167,8 +179,8 @@ if partial_pred or overall_pred:
             val_y_values_under = val_gt[mask]
             mae_under = mean_absolute_error(preds_array_under, val_y_values_under)
             mape_under = mean_absolute_percentage_error(val_y_values_under, preds_array_under)
-            mae_under = round(mae_under, 2)
-            mape_under = round(mape_under, 2)
+            mae_under = round(mae_under, 3)
+            mape_under = round(mape_under, 3)
         else:
             mae_under = "NA"
             mape_under = "NA"
@@ -177,51 +189,100 @@ if partial_pred or overall_pred:
         df_preds = val_X_filtered.copy()
         df_preds.loc[:, "actual"] = val_y_filtered
         df_preds.loc[:, "pred"] = preds_array
-
+        df_preds.loc[:, "error"] = preds_array - val_y_filtered
         df_preds.loc[:, "perc_error"] = (preds - val_y_filtered) / val_y_filtered
         st.write(df_preds)
 
 
+
+        # chart_data = pd.DataFrame(
+        #     np.random.randn(20, 3),
+        #     columns=['a', 'b', 'c'])
+
+        # c = alt.Chart(chart_data).mark_circle().encode(
+        #     x='a', y='b', size='c', color='c', tooltip=['a', 'b', 'c'])
+
+        # st.altair_chart(c, use_container_width=True)
+        if overall_pred:
+            st.subheader("Error Analysis")
+
+            st.write("""The scatter plot below shows predictions with an absolute percentage error
+                        greater than 50 percent and absolute error greater than 4 days.
+                    """)
+
+
+            # filter by error and error percentage
+            perc_error_thresh = 0.50
+            error_thresh = 4.0
+
+            abs_errors = np.abs(df_preds["error"].values)
+            abs_perc_errors = np.abs(df_preds["perc_error"].values)
+
+            df_preds.loc[:, "abs_perc_error"] = 100 * abs_perc_errors
+
+            df_preds.loc[:, "abs_error"] = abs_errors
+
+            pred_outliers = df_preds[
+                (abs_perc_errors > perc_error_thresh) &
+                (abs_errors > error_thresh)
+            ][
+                [
+                    "Carrier",
+                    "Service",
+                    "POL",
+                    "POD",
+                    "actual",
+                    "pred",
+                    "error",
+                    "perc_error",
+                    "abs_perc_error",
+                    "abs_error"
+
+                ]
+            ]
+
+            pred_scatter = alt.Chart(pred_outliers).mark_circle(size=60).encode(
+                x='actual',
+                y='pred',
+                color='Carrier',
+                size='abs_error',
+                tooltip=['POL', 'POD', 'actual', 'pred', 'perc_error']
+            ).interactive()
+
+            st.altair_chart(pred_scatter, use_container_width=True)
+
+        # percentage correct within window
+        # window = 5
+        # pred_interval_acc = np.mean(np.abs(df_preds["error"]) <= window)
+        # st.write(f"Prediction Interval ({window} day(s)): {pred_interval_acc}")
+
+        # # negative errors
+        # errors = df_preds["error"]
+        # errors_neg = errors[errors < 0]
+
+        # pred_interval_acc = np.mean(np.abs(errors_neg) <= window)
+        # st.write(f"Prediction Interval ({window} day(s), negative error): {pred_interval_acc}")
+
+        # prediction interval accuracy
+        no_std = 2
+        abs_errors = np.abs(df_preds["error"].values)
+        # print("len(preds_std_array)", len(preds_std_array))
+        # print("len(abs_errors)", len(abs_errors))
+
+
+        pred_interval_acc = np.mean(abs_errors < no_std * preds_std_array)
+
+        # st.write(f"Accuracy within (within {no_std} standard deviation): {pred_interval_acc}")
+        # st.metric("Accuracy (95\% CI)", round(pred_interval_acc, 2))
+
+
         st.subheader("Metrics")
-        col1, col2, col3, col4 = st.columns(4)
-        col1.metric("MAE", round(baseline_mae,2))
-        col2.metric("MAPE", round(baseline_mape,2))
+        col1, col2, col3, col4, col5 = st.columns(5)
+        col1.metric("MAE", round(baseline_mae,3))
+        col2.metric("MAPE", round(baseline_mape,3))
         col3.metric("MAE (delays)", mae_under)
         col4.metric("MAPE (delays)", mape_under)
+        col5.metric("Accuracy (95\% CI)", round(pred_interval_acc, 2))
 
     else:
         st.error('All expected labels are zero', icon="🚨")
-
-# END
-
-# @st.cache
-# def load_data(nrows):
-#     data = pd.read_csv(DATA_URL, nrows=nrows)
-#     lowercase = lambda x: str(x).lower()
-#     data.rename(lowercase, axis='columns', inplace=True)
-#     data[DATE_COLUMN] = pd.to_datetime(data[DATE_COLUMN])
-#     return data
-
-# # Create a text element and let the reader know the data is loading.
-# data_load_state = st.text('Loading data...')
-# # Load 10,000 rows of data into the dataframe.
-# data = load_data(10000)
-# # Notify the reader that the data was successfully loaded.
-# data_load_state.text('Done! (using st.cache)')
-
-# if st.checkbox('Show raw data'):
-#     st.subheader('Raw data')
-#     st.write(data)
-
-# st.subheader('Number of pickups by hours')
-
-# hist_values = np.histogram(
-#     data[DATE_COLUMN].dt.hour, bins=24, range=(0,24)
-# )[0]
-
-# st.bar_chart(hist_values)
-
-# hour_to_filter = st.slider('hour', 0, 23, 17)
-# filtered_data = data[data[DATE_COLUMN].dt.hour == hour_to_filter]
-# st.subheader(f'Map of all pickups at {hour_to_filter}:00')
-# st.map(filtered_data)
