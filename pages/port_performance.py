@@ -108,7 +108,7 @@ port_hours_avg_2022 = port_hours_avg[port_hours_avg["Year"]==2022]
 # merge avg hours
 rel_df_no_orf_pt_hrs = rel_df_no_orf.merge(
     port_hours_avg_2022,
-    left_on=["Calendary_Year", "Month(int)", "POD"],
+    left_on=["Calendary_Year", "Month(int)", "seaport_code"],
     right_on=["Year", "Month", "seaport_code"]
 )
 
