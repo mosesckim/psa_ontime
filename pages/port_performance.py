@@ -85,19 +85,25 @@ rel_df_no_orf.loc[:, "seaport_code"] = rel_df_no_orf["POD"]
 
 # compute average hours per call
 agg_cols = ["seaport_code", "Month", "Year"]
-target_cols = ["Port_Hours", "Anchorage_Hours"]
+target_cols = ["Total_Calls", "Port_Hours", "Anchorage_Hours"]
 
-
+# sum up calls, port/anchorage hours
+# and aggregate by port, month, and year
 port_hours_avg = port_call_df[target_cols + agg_cols].groupby(
     agg_cols
-).mean().reset_index()
+).sum().reset_index()
+
+# average port hours by port, month
+port_hours_avg.loc[:, "Avg_Port_Hours(by_call)"] = port_hours_avg[
+    "Port_Hours"
+] / port_hours_avg["Total_Calls"]
+
+# average anchorage hours by port, month
+port_hours_avg.loc[:, "Avg_Anchorage_Hours(by_call)"] = port_hours_avg[
+    "Anchorage_Hours"
+] / port_hours_avg["Total_Calls"]
 
 port_hours_avg_2022 = port_hours_avg[port_hours_avg["Year"]==2022]
-
-# rename columns
-port_hours_avg_2022.columns = [
-    "seaport_code", "Month", "Year", "Avg_Port_Hours", "Avg_Anchorage_Hours"
-]
 
 # merge avg hours
 rel_df_no_orf_pt_hrs = rel_df_no_orf.merge(
@@ -116,15 +122,16 @@ with st.sidebar:
         'POD: ',
         POD_options)
 
-    carrier_options = tuple(rel_df_no_orf_pt_hrs[
-        rel_df_no_orf_pt_hrs["POD"]==POD_option
-    ]["Carrier"].unique()
-    )
+    # TODO: include in a diff. page
+    # carrier_options = tuple(rel_df_no_orf_pt_hrs[
+    #     rel_df_no_orf_pt_hrs["POD"]==POD_option
+    # ]["Carrier"].unique()
+    # )
 
-    carrier_option = st.selectbox(
-        'Carrier: ',
-        carrier_options
-    )
+    # carrier_option = st.selectbox(
+    #     'Carrier: ',
+    #     carrier_options
+    # )
 
     plot = st.button("Plot")
 
@@ -132,31 +139,41 @@ with st.sidebar:
 if plot:
 
     pod_mask = rel_df_no_orf_pt_hrs["POD"]==POD_option
-    carrier_mask = rel_df_no_orf_pt_hrs["Carrier"]==carrier_option
+
+    # TODO: include in a different page
+    # carrier_mask = rel_df_no_orf_pt_hrs["Carrier"]==carrier_option
+    # source = rel_df_no_orf_pt_hrs[
+    #     pod_mask &
+    #     carrier_mask
+    # ]
 
     source = rel_df_no_orf_pt_hrs[
-        pod_mask &
-        carrier_mask
+        pod_mask
     ]
 
     # TODO: implement drop down menu for target labels
     # compute p-value
     label = "Avg_WaitTime_POD_Days"
-    predictor_label = "Avg_Port_Hours"  #"Avg_Anchorage_Hours"
+    predictor_label = "Avg_Port_Hours(by_call)"  #"Avg_Anchorage_Hours"
     target = source[label]
 
     predictor_format_label = ""
 
-    if label == "Avg_Anchorage_Hours":
+    if predictor_label == "Avg_Anchorage_Hours(by_call)":
         predictor_format_label = "Anchorage"
     else:
         predictor_format_label = "Service"  # Dhaval and Jiahao found service hours include anchorage time
 
     predictors = source[[predictor_label]]
 
-    p_value = round(f_regression(predictors, target)[1][0], 2)
+    p_value = round(f_regression(predictors, target)[1][0], 8)
 
-    base = alt.Chart(source, title=f"Wait/{predictor_format_label} Time at port {POD_option} for carrier {carrier_option}\n(p-value={p_value})").encode(
+    # TODO: include in a different page
+    # base = alt.Chart(source, title=f"Wait/{predictor_format_label} Time at port {POD_option} for carrier {carrier_option}\n(p-value={p_value})").encode(
+    #     alt.X('month(Date):T', axis=alt.Axis(title=None))
+    # )
+
+    base = alt.Chart(source, title=f"Wait/{predictor_format_label} Time at port {POD_option} \n(p-value={p_value})").encode(
         alt.X('month(Date):T', axis=alt.Axis(title=None))
     )
 
