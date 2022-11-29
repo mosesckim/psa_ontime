@@ -14,9 +14,10 @@ st.set_page_config(page_title="Freight", page_icon="🚢")
 st.markdown("# Carrier Rate")
 st.sidebar.header("Freight")
 st.write(
-    """Similar to port performance, we visualize the relationship between average transit time
-    and carrier rate for a given carrier and port of destination and compute an F-statistic p-value
-    as a preliminary check for linear regression on average transit time."""
+    """We visualize the relationship between average transit time and freight rate
+    for the Asia-Europe trade from February 2022 through August 2022 and compute an
+    F-statistic p-value as a preliminary check for linear regression on
+    average transit time."""
 )
 
 # DATA
@@ -116,7 +117,13 @@ freight_df_2022_month_carr.loc[:, "Carrier"] = freight_df_2022_month_carr[
 freight_df_2022_month_carr.drop("Carrier Name", inplace=True, axis=1)
 
 # ALIGN
-# merge rollover
+
+# first restrict schedule data to asia-europe trade routes
+rel_df_no_orf = rel_df_no_orf[
+    rel_df_no_orf["Trade"]=="Asia-Europe"
+]
+
+# merge freight
 rel_df_no_orf_freight = rel_df_no_orf.merge(
     freight_df_2022_month_carr,
     left_on=["Carrier", "Month(int)"],
@@ -125,34 +132,48 @@ rel_df_no_orf_freight = rel_df_no_orf.merge(
 
 
 with st.sidebar:
-    POD_options = tuple(
-        rel_df_no_orf_freight["POD"].unique()
-    )
+    # POD_options = tuple(
+    #     rel_df_no_orf_freight["POD"].unique()
+    # )
 
-    POD_option = st.selectbox(
-        'POD: ',
-        POD_options)
+    # POD_option = st.selectbox(
+    #     'POD: ',
+    #     POD_options)
 
-    carrier_options = tuple(rel_df_no_orf_freight[
-        rel_df_no_orf_freight["POD"]==POD_option
-    ]["Carrier"].unique()
+    # carrier_options = tuple(rel_df_no_orf_freight[
+    #     rel_df_no_orf_freight["POD"]==POD_option
+    # ]["Carrier"].unique()
+    # )
+
+    # carrier_option = st.selectbox(
+    #     'Carrier: ',
+    #     carrier_options
+    # )
+
+    carrier_options = tuple(
+        rel_df_no_orf_freight["Carrier"].unique()
     )
 
     carrier_option = st.selectbox(
         'Carrier: ',
-        carrier_options
-    )
+        carrier_options)
 
     plot = st.button("Plot")
 
 
 if plot:
 
-    pod_mask = rel_df_no_orf_freight["POD"]==POD_option
-    carrier_mask = rel_df_no_orf_freight["Carrier"]==carrier_option
+    # pod_mask = rel_df_no_orf_freight["POD"]==POD_option
+    # carrier_mask = rel_df_no_orf_freight["Carrier"]==carrier_option
 
+    # source = rel_df_no_orf_freight[
+    #     pod_mask &
+    #     carrier_mask
+    # ]
+
+    # average transit time across all carriers
+    carrier_mask = rel_df_no_orf_freight["Carrier"]==carrier_option
     source = rel_df_no_orf_freight[
-        pod_mask &
         carrier_mask
     ]
 
@@ -162,9 +183,14 @@ if plot:
 
     p_value = round(f_regression(predictors, target)[1][0], 2)
 
-    base = alt.Chart(source, title=f"Transit Time vs. Carrier Rate at port {POD_option} for carrier {carrier_option}\n(p-value={p_value})").encode(
+    # transit time across all carriers
+    base = alt.Chart(source, title=f"Transit Time vs. Carrier Rate for carrier {carrier_option} \n(p-value={p_value})").encode(
         alt.X('month(Date):T', axis=alt.Axis(title=None))
     )
+
+    # base = alt.Chart(source, title=f"Transit Time vs. Carrier Rate at port {POD_option} for carrier {carrier_option}\n(p-value={p_value})").encode(
+    #     alt.X('month(Date):T', axis=alt.Axis(title=None))
+    # )
 
     transittime = base.mark_line(stroke='#5276A7', interpolate='monotone').encode(
         alt.Y('average(Avg_TTDays)',
