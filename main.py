@@ -79,7 +79,8 @@ def read_file(bucket_name, file_path, is_csv=True):
 
 
 bucket_name = "psa_ontime_streamlit"
-file_path = "0928TableMapping_Reliability-SCHEDULE_RELIABILITY_PP.csv"
+# file_path = "0928TableMapping_Reliability-SCHEDULE_RELIABILITY_PP.csv"
+file_path = "2022-11-29TableMapping_Reliability-SCHEDULE_RELIABILITY_PP.csv"
 
 # read in reliability schedule data
 schedule_data = read_file(bucket_name, file_path)
@@ -150,7 +151,11 @@ with st.sidebar:
             ("Avg_TTDays", "Avg_WaitTime_POD_Days")) #"OnTime_Reliability"))
 
     # time horizon for train split
-    split_month = st.slider('Time Horizon (month)', 3, 6, 6)
+    # split_month = st.slider('Time Horizon (month)', 3, 8, 8)
+    split_month = st.slider('Time Horizon (month)', 3, 10, 10)
+    # split_month = st.slider('Time Horizon (month)', 3, 6, 6)
+
+    include_reg = st.checkbox("Linear Regression")
 
     overall_pred = st.button("Predict (overall)")
 
@@ -158,18 +163,26 @@ with st.sidebar:
 # split date
 
 # baseline
-datetime_split = datetime.datetime(2022, split_month, 2)
+datetime_split = datetime.datetime(2022, split_month, 1)
 train_df, val_res = split_data(rel_df_nona, datetime_split, label=label)
+
+# since we only have port call data up to august we restrict val_res
+if include_reg:
+    val_res = val_res[val_res["Date"] < datetime.datetime(2022, 9, 1)]
+
+    split_month = min(8, split_month)
+    datetime_split = datetime.datetime(2022, split_month, 1)
+
+    # linear regression split
+    train_X_rg, train_y_rg, val_X_rg, val_y_rg = get_reg_train_test(
+        rel_df_no_orf_pt_hrs,
+        datetime_split,
+        label=label
+    )
+
 
 val_X = val_res[["Carrier", "Service", "POD", "POL"]]
 val_y = val_res[label]
-
-# linear regression
-train_X_rg, train_y_rg, val_X_rg, val_y_rg = get_reg_train_test(
-    rel_df_no_orf_pt_hrs,
-    datetime_split,
-    label=label
-)
 
 
 with st.sidebar:
@@ -322,10 +335,12 @@ if partial_pred or overall_pred:
                 tooltip=['POL', 'POD', 'actual', 'pred', 'perc_error']
             ).interactive()
 
+            limit_thresh = 81 if label=="Avg_TTDays" else 21
+
             line = pd.DataFrame(
                 {
-                    'actual': range(0, 81),
-                    'pred': range(0, 81)
+                    'actual': range(0, limit_thresh),
+                    'pred': range(0, limit_thresh)
                 }
             )
 
@@ -337,20 +352,21 @@ if partial_pred or overall_pred:
             st.altair_chart(pred_scatter + line_plot, use_container_width=True)
 
 
-            # evaluate linear regression
-            linreg = LinearRegression()
+            if include_reg:
+                # evaluate linear regression
+                linreg = LinearRegression()
 
-            val_mae_rg, val_mape_rg, val_mae_over_rg, val_mape_over_rg = compute_train_val_mae(
-                linreg,
-                train_X_rg,
-                val_X_rg,
-                train_y_rg,
-                val_y_rg,
-                calc_mape=True,
-                label=label
-            )
+                val_mae_rg, val_mape_rg, val_mae_over_rg, val_mape_over_rg = compute_train_val_mae(
+                    linreg,
+                    train_X_rg,
+                    val_X_rg,
+                    train_y_rg,
+                    val_y_rg,
+                    calc_mape=True,
+                    label=label
+                )
 
-            eval_lin_reg = True
+                eval_lin_reg = True
 
         # percentage correct within window
         # window = 5
