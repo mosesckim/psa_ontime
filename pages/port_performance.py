@@ -47,7 +47,8 @@ def read_file(bucket_name, file_path, is_csv=True):
 bucket_name = "psa_ontime_streamlit"
 
 # SCHEDULE
-file_path = "0928TableMapping_Reliability-SCHEDULE_RELIABILITY_PP.csv"
+# file_path = "0928TableMapping_Reliability-SCHEDULE_RELIABILITY_PP.csv"
+file_path = "2022-11-29TableMapping_Reliability-SCHEDULE_RELIABILITY_PP.csv"
 # read in reliability schedule data
 schedule_data = read_file(bucket_name, file_path)
 
