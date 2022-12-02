@@ -12,7 +12,7 @@ from collections import defaultdict
 from utils import process_schedule_data, restrict_by_coverage, get_stats
 
 
-st.set_page_config(page_title="Macroeconomic", page_icon="🚢")
+st.set_page_config(page_title="Macroeconomic", page_icon="📈")
 
 st.markdown("# Macroeconomic Factors")
 st.sidebar.header("Macroeconomic factors")
