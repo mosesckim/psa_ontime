@@ -24,71 +24,71 @@ def compute_common_cols(train_X, val_X):
     return train_X_rg[common_cols], val_X_rg[common_cols]
 
 
-def compute_train_val_mae(
-    model,
-    train_X,
-    val_X,
-    train_y,
-    val_y,
-    is_xgboost=False,
-    calc_mape=False,
-):
-    train_X_rg, val_X_rg = compute_common_cols(train_X, val_X)
+# def compute_train_val_mae(
+#     model,
+#     train_X,
+#     val_X,
+#     train_y,
+#     val_y,
+#     is_xgboost=False,
+#     calc_mape=False,
+# ):
+#     train_X_rg, val_X_rg = compute_common_cols(train_X, val_X)
 
-    if is_xgboost:
-        data_dmatrix = xgb.DMatrix(data=train_X_rg, label=train_y)
-        model = xgb.XGBRegressor(
-            objective='reg:linear',
-            colsample_bytree=0.3,
-            learning_rate=0.1,
-            max_depth=5,
-            alpha=10,
-            n_estimators=10
-        )
+#     if is_xgboost:
+#         data_dmatrix = xgb.DMatrix(data=train_X_rg, label=train_y)
+#         model = xgb.XGBRegressor(
+#             objective='reg:linear',
+#             colsample_bytree=0.3,
+#             learning_rate=0.1,
+#             max_depth=5,
+#             alpha=10,
+#             n_estimators=10
+#         )
 
-    # fit model
-    model.fit(train_X_rg, train_y)
+#     # fit model
+#     model.fit(train_X_rg, train_y)
 
-    # need to make sure reliability predictions are capped at 100 and 0
+#     # need to make sure reliability predictions are capped at 100 and 0
 
-    train_preds = list(map(lambda x: 100 if x >= 100 else x, model.predict(train_X_rg)))
-    val_preds = list(map(lambda x: 100 if x >= 100 else x, model.predict(val_X_rg)))
+#     train_preds = list(map(lambda x: 100 if x >= 100 else x, model.predict(train_X_rg)))
+#     val_preds = list(map(lambda x: 100 if x >= 100 else x, model.predict(val_X_rg)))
 
-    train_preds = list(map(lambda x: 0 if x<=0 else x, train_preds))
-    val_preds = list(map(lambda x: 0 if x<=0 else x, val_preds))
+#     train_preds = list(map(lambda x: 0 if x<=0 else x, train_preds))
+#     val_preds = list(map(lambda x: 0 if x<=0 else x, val_preds))
 
-    # evaluate
-    # train MAE
-    train_mae = mean_absolute_error(train_y, train_preds)
-    # val MAE
-    val_mae = mean_absolute_error(val_y, val_preds)
+#     # evaluate
+#     # train MAE
+#     train_mae = mean_absolute_error(train_y, train_preds)
+#     # val MAE
+#     val_mae = mean_absolute_error(val_y, val_preds)
 
-    # computing MAE for overestimates
-    diff = val_preds - val_y
-    mask = diff > 0
-    val_mae_over = diff[mask].mean()
-    # print("val_preds", pd.Series(val_preds))
-    # print("mask", mask.values)
-    # mask_reset = mask.reset_index().Avg_TTDays
-    # print("val_preds", pd.Series(val_preds)[mask_reset])
-    # print("val_y", val_y)
-    # print("val_y masked", pd.Series(list(val_y))[mask_reset])
+#     # computing MAE for overestimates
+#     diff = val_preds - val_y
+#     mask = diff > 0
+#     val_mae_over = diff[mask].mean()
+#     # print("val_preds", pd.Series(val_preds))
+#     # print("mask", mask.values)
+#     # mask_reset = mask.reset_index().Avg_TTDays
+#     # print("val_preds", pd.Series(val_preds)[mask_reset])
+#     # print("val_y", val_y)
+#     # print("val_y masked", pd.Series(list(val_y))[mask_reset])
 
-    # mape
-    if calc_mape:
-        val_mape = mean_absolute_percentage_error(val_y, val_preds)
-        print(f"val MAPE: {val_mape}")
+#     # mape
+#     if calc_mape:
+#         val_mape = mean_absolute_percentage_error(val_y, val_preds)
+#         print(f"val MAPE: {val_mape}")
 
-        mask_ser = mask.reset_index().Avg_TTDays
-        val_preds_over = pd.Series(val_preds)[mask_ser]
-        val_y_over = pd.Series(list(val_y))[mask_ser]
-        val_mape_over = mean_absolute_percentage_error(val_y_over, val_preds_over)
-        print(f"val MAPE (overestimates): {val_mape_over}")
+#         mask_ser = mask.reset_index().Avg_TTDays
+#         val_preds_over = pd.Series(val_preds)[mask_ser]
+#         val_y_over = pd.Series(list(val_y))[mask_ser]
+#         val_mape_over = mean_absolute_percentage_error(val_y_over, val_preds_over)
+#         print(f"val MAPE (overestimates): {val_mape_over}")
 
 
-    print(f"train MAE: {train_mae}")
-    print(f"val MAE: {val_mae}")
-    print(f"val MAE (overestimates): {val_mae_over}")
+#     print(f"train MAE: {train_mae}")
+#     print(f"val MAE: {val_mae}")
+#     print(f"val MAE (overestimates): {val_mae_over}")
 
 
 # SPLIT
@@ -187,14 +187,14 @@ def process_schedule_data(schedule_data):
 
 
 # restrict to carrier service routes with all months covered
-def restrict_by_coverage(rel_df_nona):
+def restrict_by_coverage(rel_df_nona, min_no_months=9):
 
     rel_df_nona_cvg = rel_df_nona.groupby(
         ["POL", "POD", "Carrier", "Service"]
     ).apply(lambda x: len(x["Month"].unique())
     )
 
-    rel_df_nona_full_cvg = rel_df_nona_cvg[rel_df_nona_cvg==7]  # TODO: REMOVE hardcoded value
+    rel_df_nona_full_cvg = rel_df_nona_cvg[rel_df_nona_cvg==min_no_months]  # TODO: REMOVE hardcoded value
 
     rel_df_nona_full_cvg_indices = rel_df_nona_full_cvg.index
 
@@ -220,10 +220,91 @@ def get_carr_serv_mask(df, carrier, service):
         (df["Service"]==service)
 
 
+def add_delay_column(df):
+
+    # df_delay = df[["Month(int)", "OnTime_Reliability"]].copy()
+
+    # df_delay.loc[:, "delay"] = (df_delay["OnTime_Reliability"]==0).apply(
+    #     lambda x: "delay" if x else "non-delay"
+    # )
+
+    # df_delay.loc[:, "Month(int)"] += 1
+
+    # return df.merge(
+    #     df_delay,
+    #     on=["Month(int)"]
+    # )
+
+    # df.loc[:, "delay"] = (df["OnTime_Reliability"]==0).apply(
+    #     lambda x: "delay" if x else "non-delay"
+    # )
+
+    df.loc[:, "delay"] = (df["OnTime_Reliability"]==0).apply(
+        lambda x: "delay" if x else "non-delay"
+    )
+
+    df = gen_lag(
+        df,
+        target_cols=["delay"]
+    )
+
+    return df
+
+
+def gen_lag(
+    df,
+    lag=1,
+    lag_col="Month(int)",
+    target_cols=["OnTime_Reliability"],
+    common_cols=["Carrier", "Service", "POL", "POD", "Trade", "Month(int)"]
+):
+
+    """Generate month lag on a target column by some number of months.
+    """
+
+    # make a copy of dataframe
+    # to apply lag
+    df_lag = df.copy()
+
+    # apply lag
+    df_lag.loc[:, lag_col] += 1
+
+    # rename the target columns
+
+    for target_col in target_cols:
+        new_col_name = f"{target_col}_lag_{lag}"
+        df_lag.loc[:, new_col_name] = df_lag[target_col]
+        df_lag.drop(target_col, inplace=True, axis=1)
+
+    # get common cols to merge on
+    # common_cols = ["POL", "POD", "Carrier", "Service"]
+
+    # now merge lagged feature onto original df
+
+    df_with_lag_feature = df.merge(df_lag, on=common_cols)
+
+    df_with_lag_feature.rename(
+
+        columns={
+            "Date_x": "Date",
+            "Avg_TTDays_x": "Avg_TTDays",
+            "Avg_WaitTime_POD_Days_x": "Avg_WaitTime_POD_Days",
+            "Avg_Port_Hours(by_call)_x": "Avg_Port_Hours(by_call)",
+            "Avg_Anchorage_Hours(by_call)_x": "Avg_Anchorage_Hours(by_call)"
+        },
+        inplace=True
+    )
+
+    return df_with_lag_feature
+
+
 def get_reg_train_test(df, datetime_split, label='Avg_TTDays'):
 
+    df = add_delay_column(df)
+
+    date_column = "Date"
     # train
-    train = df[df["Date"] < datetime_split]
+    train = df[df[date_column] < datetime_split]
 
     train_wt_mean = get_train_wt_avg(train, datetime_split, label=label)
 
@@ -284,7 +365,7 @@ def get_reg_train_test(df, datetime_split, label='Avg_TTDays'):
 
 
     # val
-    val = df[df["Date"] >= datetime_split]
+    val = df[df[date_column] >= datetime_split]
 
     #
     val = train_wt_mean.merge(val, on=[
@@ -320,7 +401,8 @@ def get_reg_train_test(df, datetime_split, label='Avg_TTDays'):
         f"{label}_train",
         f"{label}(std)_train",
         f"{label}_min_train",
-        f"{label}_max_train"
+        f"{label}_max_train",
+        "delay"
     ]
 
 
@@ -331,6 +413,8 @@ def get_reg_train_test(df, datetime_split, label='Avg_TTDays'):
 
 
 def get_train_wt_avg(rel_df_nona, datetime_split, label="Avg_TTDays", agg_fun=weighted_average_ser):
+
+
     train = rel_df_nona[rel_df_nona["Date"] < datetime_split]
 
     # weighted average
@@ -375,6 +459,7 @@ def compute_train_val_mae(
     calc_mape=False,
     label="Avg_TTDays"
 ):
+
     train_X_rg, val_X_rg = compute_common_cols(train_X, val_X)
 
     if is_xgboost:
@@ -392,7 +477,6 @@ def compute_train_val_mae(
     model.fit(train_X_rg, train_y)
 
     # need to make sure reliability predictions are capped at 100 and 0
-
     train_preds = list(map(lambda x: 100 if x >= 100 else x, model.predict(train_X_rg)))
     val_preds = list(map(lambda x: 100 if x >= 100 else x, model.predict(val_X_rg)))
 
@@ -456,3 +540,50 @@ def compute_train_val_mae(
         return val_mae, val_mape, val_mae_over, val_mape_over
 
     return val_mae, val_mape
+
+
+
+def get_stats(df, label="Avg_TTDays"):
+    """Given a route (origin, destination, carrier, service),
+       return delay and outlier count
+    """
+
+    res = {}
+    # count the no. of delays
+
+    if df["OnTime_Reliability"].isna().sum() != 0: print("Found na!")
+
+
+    if df.shape[0] != 9:
+
+        mean_by_month = df.groupby("Month(int)").mean()
+
+        label_col = df.groupby("Month(int)").mean()[label]
+        ontime_col = df.groupby("Month(int)").min()["OnTime_Reliability"]
+        months = mean_by_month.reset_index()['Month(int)']
+
+
+        delay_mask = ontime_col==0
+
+        sigma = label_col.std()
+        mu = label_col.mean()
+
+        outlier_mask = np.abs(label_col - mu) > 2*sigma
+
+    else:
+        delay_mask = df["OnTime_Reliability"]==0
+        # count the no. of outliers (col="Avg_TTDays")
+        sigma = df[label].std()
+        mu = df[label].mean()
+        outlier_mask = np.abs(df[label] - mu) > 2*sigma
+        months = df["Month(int)"]
+
+
+    res = dict(
+            zip(
+                months,
+                zip(delay_mask, outlier_mask)
+            )
+        )
+
+    return pd.Series(res)
