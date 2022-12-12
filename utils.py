@@ -298,7 +298,7 @@ def gen_lag(
     return df_with_lag_feature
 
 
-def get_reg_train_test(df, datetime_split, label='Avg_TTDays'):
+def get_reg_train_test(df, datetime_split, label='Avg_TTDays', use_retail=False):
 
     df = add_delay_column(df)
 
@@ -390,20 +390,43 @@ def get_reg_train_test(df, datetime_split, label='Avg_TTDays'):
     ])
 
     # predictors
-    predictors = [
-        "POL",
-        "POD",
-        "Carrier",
-        "Service",
-        "Trade",
-        "Avg_Port_Hours(by_call)",
-        "Avg_Anchorage_Hours(by_call)",
-        f"{label}_train",
-        f"{label}(std)_train",
-        f"{label}_min_train",
-        f"{label}_max_train",
-        "delay"
-    ]
+
+    if not use_retail:
+        predictors = [
+            "POL",
+            "POD",
+            "Carrier",
+            "Service",
+            "Trade",
+            "Avg_Port_Hours(by_call)",
+            "Avg_Anchorage_Hours(by_call)",
+            f"{label}_train",
+            f"{label}(std)_train",
+            f"{label}_min_train",
+            f"{label}_max_train",
+            "delay"
+        ]
+    else:
+
+        train.rename(columns={"retail_sales_x": "retail_sales"}, inplace=True)
+        val.rename(columns={"retail_sales_x": "retail_sales"}, inplace=True)
+
+        # drop retail sales na values
+        train = train[~train["retail_sales"].isna()]
+        val = val[~val["retail_sales"].isna()]
+
+        predictors = [
+            "POL",
+            "POD",
+            "Carrier",
+            "Service",
+            "Trade",
+            "retail_sales",
+            f"{label}_train",
+            f"{label}(std)_train",
+            f"{label}_min_train",
+            f"{label}_max_train",
+        ]
 
 
     train_X, train_y = train[predictors], train[label]

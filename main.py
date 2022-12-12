@@ -78,6 +78,22 @@ def read_file(bucket_name, file_path, is_csv=True):
     return pd.read_excel(data_bytes)
 
 
+@st.experimental_memo(ttl=600)
+def read_file_(bucket_name, file_path, is_csv=True, sheet=None):
+    bucket = client.bucket(bucket_name)
+
+    blob = bucket.blob(file_path)
+
+    if is_csv:
+        with blob.open("r") as f:
+            df = pd.read_csv(f)
+        return df
+
+    data_bytes = blob.download_as_bytes()
+
+    return pd.read_excel(data_bytes, sheet)
+
+
 bucket_name = "psa_ontime_streamlit"
 # file_path = "0928TableMapping_Reliability-SCHEDULE_RELIABILITY_PP.csv"
 file_path = "2022-11-29TableMapping_Reliability-SCHEDULE_RELIABILITY_PP.csv"
@@ -145,6 +161,137 @@ rel_df_no_orf_pt_hrs = rel_df_no_orf.merge(
 )
 
 
+
+# schedule + retail
+
+# reliability POL mapping -> retail_sales country/region
+rel_port_map = {
+    'AEAUH': 'Agg Middle East & Africa',
+    'AEJEA': 'Agg Middle East & Africa',
+    'BEANR': 'Belgium',
+    'BRRIG': 'Brazil',
+    'CNNGB': 'China',
+    'CNSHA': 'China',
+    'CNSHK': 'China',
+    'CNTAO': 'China',
+    'CNYTN': 'China',
+    'COCTG': 'Colombia',
+    'DEHAM': 'Denmark',
+    'ESBCN': 'Spain',
+    'ESVLC': 'Spain',
+    'GBLGP': 'U.K.',
+    'GRPIR': 'Greece',
+    'HKHKG': 'Hong Kong',
+    'JPUKB': 'Japan',
+    'KRPUS': 'South Korea',
+    'LKCMB': 'Agg Asia Pacific',
+    'MAPTM': 'Agg Middle East & Africa',
+    'MXZLO': 'Mexico',
+    'MYPKG': 'Agg Asia Pacific',
+    'MYTPP': 'Agg Asia Pacific',
+    'NLRTM': 'Netherlands',
+    'NZAKL': 'Agg Asia Pacific',
+    'PAMIT': 'Agg Latin America',
+    'SAJED': 'Agg Middle East & Africa',
+    'SAJUB': 'Agg Middle East & Africa',
+    'SGSIN': 'Singapore',
+    'THLCH': 'Thailand',
+    'TWKHH': 'Taiwan',
+    'USBAL': 'U.S.',
+    'USCHS': 'U.S.',
+    'USHOU': 'U.S.',
+    'USILM': 'U.S.',
+    'USLAX': 'U.S.',
+    'USLGB': 'U.S.',
+    'USMOB': 'U.S.',
+    'USMSY': 'U.S.',
+    'USNYC': 'U.S.',
+    'USORF': 'U.S.',
+    'USSAV': 'U.S.',
+    'USTIW': 'U.S.'
+}
+
+rel_df_nona.loc[:, "region"] = rel_df_nona["POL"].apply(
+    lambda x: rel_port_map[x]
+)
+
+
+
+
+# retail sales
+sales_filename = "Retail Sales 202210.xlsx"
+sales_sheet_name = "Sales"
+sales_df = read_file_(
+    bucket_name,
+    sales_filename,
+    sheet=sales_sheet_name,
+    is_csv=False
+)
+
+
+# process retail sales data
+new_cols = [col.strip() for col in sales_df.columns]
+sales_df.columns = new_cols
+
+sales_df.loc[:, "month"] = sales_df["MonthYear"].apply(
+    lambda x: int(x.split("/")[0])
+)
+
+sales_df.loc[:, "year"] = sales_df["MonthYear"].apply(
+    lambda x: int(x.split("/")[1])
+)
+
+sales_df.loc[:, "date"] = sales_df["MonthYear"].apply(
+    lambda x: datetime.datetime.strptime(
+        x, "%m/%Y"
+    )
+)
+
+# create offset date column
+sales_df.loc[:, "date(offset)"] = sales_df['date'] + pd.DateOffset(months=1)
+
+# create a retail sales map given date and country/region
+# date, country/region -> retail sales index
+regions = [
+    'Agg North America', 'U.S.', 'Canada', 'Mexico',
+    'Agg Western Europe', 'Austria', 'Belgium', 'Cyprus', 'Denmark',
+    'Euro Area', 'Finland', 'France', 'Germany', 'Greece', 'Iceland',
+    'Ireland', 'Italy', 'Luxembourg', 'Netherlands', 'Norway', 'Portugal',
+    'Spain', 'Sweden', 'Switzerland', 'U.K.', 'Agg Asia Pacific',
+    'Australia', 'China', 'Hong Kong', 'Indonesia', 'Japan', 'Kazakhstan',
+    'Macau', 'Singapore', 'South Korea', 'Taiwan', 'Thailand', 'Vietnam',
+    'Agg Eastern Europe', 'Bulgaria', 'Croatia', 'Czech Republic',
+    'Estonia', 'Hungary', 'Latvia', 'Lithuania', 'Poland', 'Romania',
+    'Russia', 'Serbia', 'Slovenia', 'Turkey', 'Agg Latin America',
+    'Argentina', 'Brazil', 'Chile', 'Colombia', 'Agg Middle East & Africa',
+    'Israel', 'South Africa'
+]
+
+
+date_region_sales = {}
+for region in regions:
+    region_dict = dict(
+        zip(
+            sales_df["date(offset)"],
+            sales_df[region]
+        )
+    )
+
+    date_region_sales[region] = region_dict
+
+
+# calculate max date to avoid index error
+max_date = sales_df["date(offset)"].max()
+
+# finally, create new columns
+# iterate over rows
+rel_df_nona.loc[:, "retail_sales"] = rel_df_nona.apply(
+    lambda x: date_region_sales[x["region"]][x["Date"]] if x["Date"] <= max_date else None, axis=1
+)
+
+rel_df_sales = rel_df_nona.copy()
+
+
 with st.sidebar:
     label = st.selectbox(
             'Label: ',
@@ -173,11 +320,19 @@ if include_reg:
     split_month = min(8, split_month)
     datetime_split = datetime.datetime(2022, split_month, 1)
 
-    # linear regression split
+    # linear regression split (port hours)
     train_X_rg, train_y_rg, val_X_rg, val_y_rg = get_reg_train_test(
         rel_df_no_orf_pt_hrs,
         datetime_split,
         label=label
+    )
+
+    # linear regression split (retail)
+    train_X_rg_ret, train_y_rg_ret, val_X_rg_ret, val_y_rg_ret = get_reg_train_test(
+        rel_df_sales,
+        datetime_split,
+        label=label,
+        use_retail=True
     )
 
 
@@ -366,6 +521,17 @@ if partial_pred or overall_pred:
                     label=label
                 )
 
+                linreg = LinearRegression()  # I am no too sure if we need to instantiate twice
+                val_mae_rg_ret, val_mape_rg_ret, val_mae_over_rg_ret, val_mape_over_rg_ret = compute_train_val_mae(
+                    linreg,
+                    train_X_rg_ret,
+                    val_X_rg_ret,
+                    train_y_rg_ret,
+                    val_y_rg_ret,
+                    calc_mape=True,
+                    label=label
+                )
+
                 eval_lin_reg = True
 
         # percentage correct within window
@@ -411,6 +577,14 @@ if partial_pred or overall_pred:
             col2.metric("MAPE", round(val_mape_rg, 3))
             col3.metric("MAE (delays)", round(val_mae_over_rg, 3))
             col4.metric("MAPE (delays)", round(val_mape_over_rg, 3))
+            col5.metric("Accuracy (95\% CI)", "NA")
+
+            st.markdown("##### Retail Sales")
+            col1, col2, col3, col4, col5 = st.columns(5)
+            col1.metric("MAE", round(val_mae_rg_ret, 3))
+            col2.metric("MAPE", round(val_mape_rg_ret, 3))
+            col3.metric("MAE (delays)", round(val_mae_over_rg_ret, 3))
+            col4.metric("MAPE (delays)", round(val_mape_over_rg_ret, 3))
             col5.metric("Accuracy (95\% CI)", "NA")
 
 
