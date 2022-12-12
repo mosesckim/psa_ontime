@@ -58,15 +58,157 @@ rel_df_nona = process_schedule_data(schedule_data)
 rel_df_nona = restrict_by_coverage(rel_df_nona)
 
 
+# read in freight data
+# freight (carrier rates)
+# carrier filenames
+carrier_filenames = [
+    "Xeneta Freight Rates_FEEB_N. Europe to Far East_DFE.xlsx",
+    "Xeneta Freight Rates_FEWB_Far East to N. Europe_DFE.xlsx",
+    "Xeneta Freight Rates_TAEB_USEC to N. Europe_DFE.xlsx",
+    "Xeneta Freight Rates_TAWB_N. Europe to USEC_DFE.xlsx",
+    "Xeneta Freight Rates_TPEB_Far East to USWC_DFE.xlsx",
+    "Xeneta Freight Rates_TPWB_USWC to Far East_DFE.xlsx"
+]
 
-rel_df_nona_trade = rel_df_nona.copy()
+# corresp. sheet names
+carrier_sheetnames = [
+    "N. Europe to Far East",
+    "Far East to N. Europe",
+    "USEC to N.Europe",
+    "N. Europe to USEC",
+    "Far East to USWC",
+    "USWC to Far East"
+]
 
-trade_options = rel_df_nona_trade["Trade"].unique()
+# carrier df dictionary
+freight_filename_dict = dict(
+    zip(
+        carrier_sheetnames,
+        carrier_filenames
+    )
+)
+
+# now load files
+freight_dfs = {}
+
+def add_date_col(df):
+
+    df.loc[
+        :, "date"
+    ] = df["Day"].apply(
+        lambda x: datetime.datetime.strptime(
+            x, "%Y-%m-%d"
+        )
+    )
+
+
+for route in freight_filename_dict:
+
+    filename = freight_filename_dict[route]
+
+    freight_df = read_file(
+        bucket_name,
+        filename,
+        sheet=route,
+        is_csv=False
+    )
+
+    # add necessary date columns
+    add_date_col(freight_df)
+
+    freight_dfs[route] = freight_df
+
+
 
 with st.sidebar:
-    trade_option = st.selectbox(
-        'Trade: ',
-        trade_options)
+    route_option = st.selectbox(
+        'Route: ',
+        carrier_sheetnames)
+
+
+freight_trade_dict = {
+    'N. Europe to Far East': 'Asia-Europe',
+    'Far East to N. Europe': 'Asia-Europe',
+    'USEC to N.Europe': 'Europe-North America East Coast',
+    'N. Europe to USEC': 'Europe-North America East Coast',
+    'Far East to USWC': 'Asia-North America West Coast',
+    'USWC to Far East': 'Asia-North America West Coast'
+}
+
+# restrict trade to chosen route
+rel_df_nona_trade = rel_df_nona.copy()
+
+trade_option = freight_trade_dict[route_option]
+rel_df_nona_trade = rel_df_nona_trade[
+    rel_df_nona_trade["Trade"]==trade_option
+]
+
+# restrict pod to chosen route
+europe_pods = [
+    'BEANR',
+    'DEHAM',
+    'NLRTM',
+    'ITGOA',
+    'GBLGP',
+    'FRLEH',
+]
+
+asian_pods = [
+    'CNNGB',
+    'CNSHA',
+    'CNTAO',
+    'KRPUS',
+    'MYPKG',
+    'HKHKG',
+    'LKCMB',
+    'JPTYO',
+    'JPYOK',
+    'CNDLC',
+    'VNHPH',
+    'CNSHK',
+    'CNTXG',
+    'THBKK',
+    'VNSGN',
+    'CNXMN',
+    'CNYTN',
+    'TWKHH',
+    'JPUKB',
+]
+
+usec_pods = [
+    'USCHS',
+    'USNYC',
+    'USORF',
+    'USSAV',
+]
+
+uswc_pods = [
+    'USLAX',
+    'USLGB',
+    'USSEA',
+    'USTIW',
+]
+
+
+freight_pod_dict = {
+    'N. Europe to Far East': asian_pods,
+    'Far East to N. Europe': europe_pods,
+    'USEC to N.Europe': europe_pods,
+    'N. Europe to USEC': usec_pods,
+    'Far East to USWC': uswc_pods,
+    'USWC to Far East': asian_pods
+}
+
+route_pods = freight_pod_dict[route_option]
+rel_df_nona_trade = rel_df_nona_trade[
+    rel_df_nona_trade["POD"].isin(route_pods)
+]
+
+
+# with st.sidebar:
+#     trade_option = st.selectbox(
+#         'Trade: ',
+#         trade_options)
 
 
 months = list(rel_df_nona_trade["Month(int)"].unique())
@@ -155,7 +297,7 @@ def convert_to_frame(delay_dict):
     return route_delay_df
 
 
-Trade = 'Asia-North America East Coast'  #'Asia-MEA'
+Trade = trade_option #'Asia-North America East Coast'  #'Asia-MEA'
 col_label = "Avg_TTDays"
 rel_df_nona_delays = rel_df_nona.copy()
 
@@ -179,8 +321,10 @@ tt_delay_analysis_by_route = rel_df_nona_delays.groupby(
     lambda x: dict(zip(x["Month(int)"], zip(x[col_label], x["delay"])) )
 )
 
+no_indices = len(tt_delay_analysis_by_route)
+idx = min(200, no_indices - 1)
 
-route = tt_delay_analysis_by_route.index[200]
+route = tt_delay_analysis_by_route.index[idx]
 
 delay_df = convert_to_frame(tt_delay_analysis_by_route[route])
 source = delay_df
@@ -193,22 +337,23 @@ source = delay_df
 # ).interactive()
 
 
+# choose freight data given route
+
+freight_df = freight_dfs[route_option]
 
 
+# # Northern Europe to Far East
+# freight_filename = "Xeneta Freight Rates_TPEB_Far East to USWC_DFE.xlsx"  #"Xeneta Benchmarks and Carrier Spread 2022-08-29 08_33 FEWB.xlsx"
+# freight_sheet_name = "Far East to USWC"
+# # freight indext (carrier spread)
+# # FAR EAST to WEST COAST
+# freight_df = read_file(
+#     bucket_name,
+#     freight_filename,
+#     sheet=freight_sheet_name,
+#     is_csv=False
+# )
 
-# freight (carrier rates)
-
-# Northern Europe to Far East
-freight_filename = "Xeneta Freight Rates_TPEB_Far East to USWC_DFE.xlsx"  #"Xeneta Benchmarks and Carrier Spread 2022-08-29 08_33 FEWB.xlsx"
-freight_sheet_name = "Far East to USWC"
-# freight indext (carrier spread)
-# FAR EAST to WEST COAST
-freight_df = read_file(
-    bucket_name,
-    freight_filename,
-    sheet=freight_sheet_name,
-    is_csv=False
-)
 
 # AIR FREIGHT
 # SHANGHAI TO LAX
@@ -267,13 +412,11 @@ ind_prod_df = read_file(
 
 
 # pre-process data
-
-
-freight_df.loc[:, "date"] = freight_df["Day"].apply(
-    lambda x: datetime.datetime.strptime(
-        x, "%Y-%m-%d"
-    )
-)
+# freight_df.loc[:, "date"] = freight_df["Day"].apply(
+#     lambda x: datetime.datetime.strptime(
+#         x, "%Y-%m-%d"
+#     )
+# )
 
 new_cols = [col.strip() for col in sales_df.columns]
 sales_df.columns = new_cols
@@ -340,6 +483,10 @@ predictors_str = [
 
 merge_res = {}
 
+# restrict dates
+datetime_min_thresh = datetime.datetime(2022, 1, 1)
+freight_df = freight_df[freight_df["date"]>=datetime_min_thresh]
+
 for pred_str in predictors_str:
     merge_res[pred_str] = freight_df.merge(
         eval(f"{pred_str}_df"),
@@ -347,13 +494,46 @@ for pred_str in predictors_str:
     )
 
 
+# predictor_cols = dict(
+#     zip(
+#         predictors_str,
+#         [
+#             "Agg North America",
+#             "BDI",
+#             "Agg_North America",
+#             "Canada", #"100(U.S.)",
+#             "DAF TA Index"
+#         ]
+#     )
+# )
+
+freight_sales_dict = {
+    'N. Europe to Far East': 'Agg Asia Pacific',
+    'Far East to N. Europe': 'Euro Area',
+    'USEC to N.Europe': 'Euro Area',
+    'N. Europe to USEC':'Agg North America',
+    'Far East to USWC': 'Agg North America',
+    'USWC to Far East': 'Agg Asia Pacific'
+}
+
+freight_cpi_dict = {
+    'N. Europe to Far East': 'Agg_Asia Pacific',
+    'Far East to N. Europe': 'Euro Area',
+    'USEC to N.Europe': 'Euro Area',
+    'N. Europe to USEC':'Agg_North America',
+    'Far East to USWC': 'Agg_North America',
+    'USWC to Far East': 'Agg_Asia Pacific'
+}
+
+
+
 predictor_cols = dict(
     zip(
         predictors_str,
         [
-            "Agg North America",
+            freight_sales_dict[route_option],
             "BDI",
-            "Agg_North America",
+            freight_cpi_dict[route_option],
             "Canada", #"100(U.S.)",
             "DAF TA Index"
         ]
@@ -380,9 +560,9 @@ with st.sidebar:
         'Predictor: ',
         [
             "sales",
-            "bdi",
+            # "bdi",
             "cpi",
-            "air_freight"
+            # "air_freight"
          ])
 
     plot = st.button("Plot")
@@ -420,6 +600,8 @@ if plot:
     predictor_title = predictor_titles[predictor]
     predictor_column = predictor_cols[predictor]
     source = merge_res[predictor]
+
+
 
     base = alt.Chart(
         source,
